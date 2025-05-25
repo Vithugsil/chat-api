@@ -1,0 +1,50 @@
+networks:
+  minha-rede:
+    driver: bridge
+
+services:
+  app:
+    container_name: app
+    build:
+      context: ./Record-API/
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_USER: root
+      MYSQL_PASSWORD: vi@@2022
+      MYSQL_DB: Message
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - minha-rede
+
+  mysql:
+    container_name: mysql
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: vi@@2022
+      MYSQL_DATABASE: Message
+    command: --default-authentication-plugin=mysql_native_password
+    ports:
+      - "3307:3307"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - minha-rede
+
+  redis:
+    container_name: redis
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - minha-rede
+
+volumes:
+  mysql_data:
