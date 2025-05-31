@@ -3,8 +3,19 @@ networks:
     driver: bridge
 
 services:
-  app:
-    container_name: app
+  receive-send-api:
+    container_name: receive-send-api
+    build:
+      context: ./Receive-Send-API/
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - minha-rede
+
+  record-api:
+    container_name: record-api
     build:
       context: ./Record-API/
       dockerfile: Dockerfile
@@ -34,7 +45,6 @@ services:
       - "3307:3307"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - minha-rede
 
@@ -43,6 +53,18 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    networks:
+      - minha-rede
+
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    ports:
+      - "15672:15672"
+      - "5672:5672"
     networks:
       - minha-rede
 
