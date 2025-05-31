@@ -1,6 +1,6 @@
 const express = require("express");
 const axios = require("axios");
-const mysql = require("mysql2");
+const rabbitmq = require("amqplib/callback_api");
 const app = express();
 
 app.use(express.json());
@@ -47,6 +47,19 @@ app.post("/message", (req, res) => {
     });
   }
 
+  addToQueue("messageQueue", {
+    message,
+    userIdSend,
+    userIdReceive,
+  });
+
+  // Adding to history
+  addToHistory({
+    message,
+    userIdSend,
+    userIdReceive,
+  });
+
   // returning  response
   return res.status(SUCCESS).json({
     message: "Message received successfully",
@@ -58,9 +71,50 @@ app.post("/message", (req, res) => {
   });
 });
 
-
 async function verifyToken(token) {
   return true;
+}
+
+function addToQueue(queueName, messageBody) {
+  // Use correct credentials: replace 'guest' and 'guest' with your RabbitMQ username and password if different
+  rabbitmq.connect(
+    "amqp://admin:admin@rabbitmq:5672",
+    function (error0, connection) {
+      if (error0) {
+        console.error("RabbitMQ connection error:", error0);
+        return;
+      }
+      connection.createChannel(function (error1, channel) {
+        if (error1) {
+          console.error("RabbitMQ channel error:", error1);
+          return;
+        }
+        channel.assertQueue(queueName, { durable: true });
+        channel.sendToQueue(
+          queueName,
+          Buffer.from(JSON.stringify(messageBody)),
+          {
+            persistent: true,
+          }
+        );
+        setTimeout(() => {
+          channel.close();
+          connection.close();
+        }, 500);
+      });
+    }
+  );
+}
+
+function addToHistory(messageBody) {
+  axios
+    .post("http://record-api:5000/record", messageBody)
+    .then((response) => {
+      console.log("History added successfully:", response.data);
+    })
+    .catch((error) => {
+      console.error("Error adding to history:", error.message);
+    });
 }
 
 app.listen(3000, () => {
