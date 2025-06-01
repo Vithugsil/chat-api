@@ -1,6 +1,7 @@
 const express = require("express");
 const axios = require("axios");
 const rabbitmq = require("amqplib/callback_api");
+const redis = require("redis");
 const app = express();
 
 app.use(express.json());
@@ -12,7 +13,21 @@ const BAD_REQUEST = 400;
 const UNAUTHORIZED = 401;
 const FORBIDDEN = 403;
 
-app.post("/message", (req, res) => {
+// Redis client setup
+const redisClient = redis.createClient({
+  url: "redis://redis:6379",
+});
+
+(async () => {
+  try {
+    await redisClient.connect();
+    console.log("Connected to Redis successfully");
+  } catch (err) {
+    console.error("Failed to connect to Redis:", err);
+  }
+})();
+
+app.post("/message", async (req, res) => {
   //getting headers
   const headers = req.headers["authorization"];
   if (!headers) {
@@ -47,27 +62,49 @@ app.post("/message", (req, res) => {
     });
   }
 
-  addToQueue("messageQueue", {
+  redisClient.rPush(`${userIdSend}:${userIdReceive}`, JSON.stringify(message));
+
+  addToRabbitQueue("messageQueue", {
     message,
     userIdSend,
     userIdReceive,
   });
 
-  // Adding to history
-  addToHistory({
+  await addToHistory({
     message,
     userIdSend,
     userIdReceive,
   });
 
-  // returning  response
   return res.status(SUCCESS).json({
-    message: "Message received successfully",
-    data: {
-      message,
+    message: "mesage sended with success",
+  });
+});
+
+app.post("/message/worker", async (req, res) => {
+  const token = req.headers["authorization"];
+  const { userIdSend, userIdReceive } = req.body;
+  const authRsponse = verifyToken(token);
+  if (!authRsponse) {
+    return res.status(FORBIDDEN).json({
+      error: "Invalid token",
+    });
+  }
+  const channel = `${userIdSend}:${userIdReceive}`;
+  console.log(`Processing worker for channel ${channel}`);
+  const messages = await DequeueMessages(channel);
+  console.log(`Found ${messages.length} messages`);
+
+  for (const message of messages) {
+    await addToHistory({
+      message: message,
       userIdSend,
       userIdReceive,
-    },
+    });
+  }
+
+  return res.status(SUCCESS).json({
+    message: "Messages processed successfully",
   });
 });
 
@@ -75,42 +112,48 @@ async function verifyToken(token) {
   return true;
 }
 
-function addToQueue(queueName, messageBody) {
-  // Use correct credentials: replace 'guest' and 'guest' with your RabbitMQ username and password if different
-  rabbitmq.connect(
-    "amqp://admin:admin@rabbitmq:5672",
-    function (error0, connection) {
-      if (error0) {
-        console.error("RabbitMQ connection error:", error0);
-        return;
-      }
-      connection.createChannel(function (error1, channel) {
-        if (error1) {
-          console.error("RabbitMQ channel error:", error1);
-          return;
-        }
-        channel.assertQueue(queueName, { durable: true });
-        channel.sendToQueue(
-          queueName,
-          Buffer.from(JSON.stringify(messageBody)),
-          {
-            persistent: true,
-          }
-        );
-        setTimeout(() => {
-          channel.close();
-          connection.close();
-        }, 500);
-      });
-    }
-  );
+async function DequeueMessages(queueName) {
+  const messages = [];
+  let mesage;
+  do {
+    mesage = await redisClient.lPop(queueName);
+    if (mesage) messages.push(JSON.parse(mesage));
+  } while (mesage !== null);
+  return messages;
 }
 
-function addToHistory(messageBody) {
-  axios
-    .post("http://record-api:5000/record", messageBody)
+function addToRabbitQueue(queueName, messageBody) {
+  rabbitmq.connect("amqp://admin:admin@rabbitmq:5672", (error0, connection) => {
+    if (error0) {
+      console.error("RabbitMQ connection error:", error0);
+      return;
+    }
+    connection.createChannel(function (error1, channel) {
+      if (error1) {
+        console.error("RabbitMQ channel error:", error1);
+        return;
+      }
+      channel.assertQueue(queueName, { durable: true });
+      channel.sendToQueue(queueName, Buffer.from(JSON.stringify(messageBody)), {
+        persistent: true,
+      });
+      setTimeout(() => {
+        channel.close();
+        connection.close();
+      }, 500);
+    });
+  });
+}
+
+async function addToHistory(messageBody) {
+  await axios
+    .post("http://record-api:5000/message", messageBody, { timeout: 5000 })
     .then((response) => {
-      console.log("History added successfully:", response.data);
+      if (response.status !== SUCCESS) {
+        console.error("Failed to add to history:", response.data);
+      } else {
+        console.log("Message added to history successfully");
+      }
     })
     .catch((error) => {
       console.error("Error adding to history:", error.message);

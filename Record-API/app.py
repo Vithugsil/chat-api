@@ -14,7 +14,7 @@ redis_client = rd.Redis(
     decode_responses=True
 )
 
-@app.route('/record', methods=['POST'])
+@app.route('/message', methods=['POST'])
 def record_message():
     data = request.get_json()
     if data is None:
@@ -41,10 +41,10 @@ def record_message():
     if not message or not user_id_send or not user_id_receive:
         return jsonify({"error": "Missing required fields"}), HttpStatus.BAD_REQUEST.value
     
+    connection = None
+    cursor = None
     try:
-        # Create table if it does not exist
         createTableIfNotExists()
-
         connection = connectToDatabase()
         cursor = connection.cursor()
         query = "INSERT INTO messages (message, user_id_send, user_id_receive) VALUES (%s, %s, %s)"
@@ -62,8 +62,10 @@ def record_message():
         print(f"Error: {err}")
         return jsonify({"error": str(err)}), 500
     finally:
-        cursor.close()
-        connection.close()
+        if cursor is not None:
+            cursor.close()
+        if connection is not None:
+            connection.close()
 
     return jsonify({"message": "ok"}), HttpStatus.OK.value
 
@@ -76,6 +78,7 @@ def connectToDatabase():
         db=os.getenv('MYSQL_DB', 'Message'),
         cursorclass=pymysql.cursors.DictCursor
     )
+    connection.connect_timeout = 9999999
     return connection
 
 def createTableIfNotExists():
