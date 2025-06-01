@@ -85,11 +85,13 @@ app.post("/message/worker", async (req, res) => {
   const token = req.headers["authorization"];
   const { userIdSend, userIdReceive } = req.body;
   const authRsponse = verifyToken(token);
+
   if (!authRsponse) {
     return res.status(FORBIDDEN).json({
       error: "Invalid token",
     });
   }
+
   const channel = `${userIdSend}:${userIdReceive}`;
   console.log(`Processing worker for channel ${channel}`);
   const messages = await DequeueMessages(channel);
@@ -158,6 +160,92 @@ async function addToHistory(messageBody) {
     .catch((error) => {
       console.error("Error adding to history:", error.message);
     });
+}
+
+app.post("/message/worker2", async (req, res) => {
+  const token = req.headers["authorization"];
+  const { userIdSend, userIdReceive } = req.body;
+  const authRsponse = verifyToken(token);
+
+  if (!authRsponse) {
+    return res.status(FORBIDDEN).json({
+      error: "Invalid token",
+    });
+  }
+
+  const channel = `${userIdSend}:${userIdReceive}`;
+  console.log(`Processing worker for channel ${channel}`);
+  const messages = await DequeueMessages(channel);
+  console.log(`Found ${messages.length} messages`);
+
+  for (const message of messages) {
+    await addToHistory({
+      message: message,
+      userIdSend,
+      userIdReceive,
+    });
+  }
+
+  return res.status(SUCCESS).json({
+    message: "Messages processed successfully",
+  });
+});
+
+async function DequeueMessagesRabbit(queueName) {
+  return new Promise((resolve, reject) => {
+    rabbitmq.connect(
+      "amqp://admin:admin@rabbitmq:5672",
+      (error0, connection) => {
+        if (error0) {
+          console.error("RabbitMQ connection error:", error0);
+          return reject(error0);
+        }
+        connection.createChannel(async (error1, channel) => {
+          if (error1) {
+            console.error("RabbitMQ channel error:", error1);
+            connection.close();
+            return reject(error1);
+          }
+          channel.assertQueue(queueName, { durable: true });
+          let messages = [];
+          let keepConsuming = true;
+
+          const consumeNext = () => {
+            channel.get(queueName, {}, async (err, msg) => {
+              if (err) {
+                console.error("RabbitMQ get error:", err);
+                keepConsuming = false;
+                channel.close();
+                connection.close();
+                return reject(err);
+              }
+              if (msg) {
+                try {
+                  const payload = JSON.parse(msg.content.toString());
+                  await addToHistory(payload);
+                  messages.push(payload);
+                  channel.ack(msg);
+                  consumeNext();
+                } catch (e) {
+                  console.error("Error processing message:", e);
+                  channel.nack(msg, false, false); // remove from queue
+                  consumeNext();
+                }
+              } else {
+                // No more messages
+                keepConsuming = false;
+                channel.close();
+                connection.close();
+                resolve(messages);
+              }
+            });
+          };
+
+          consumeNext();
+        });
+      }
+    );
+  });
 }
 
 app.listen(3000, () => {
