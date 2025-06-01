@@ -1,0 +1,30 @@
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+  
+  auth-api:
+    build: ./auth
+    container_name: auth-api
+    ports:
+      - "8001:80"
+    volumes:
+      - ./auth:/var/www/html
+
+  record-api:
+    build: ./record
+    container_name: record-api
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./record:/app
+
+  receive-send-api:
+    build: ./receive-send
+    container_name: receive-send-api
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis

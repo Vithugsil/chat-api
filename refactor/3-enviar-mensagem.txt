@@ -1,0 +1,4 @@
+curl -X POST http://localhost:3000/message \
+  -H "Content-Type: application/json" \
+  -H "Authorization: SEU_TOKEN_USUARIO_1" \
+  -d '{"userIdSend":"ID_USUARIO_1", "userIdReceive":"ID_USUARIO_4", "message":"Olá, tudo bem?"}'

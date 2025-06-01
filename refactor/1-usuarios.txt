@@ -1,0 +1,15 @@
+curl -X POST http://localhost:8001/user \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Usuário 1","lastName":"Um","email":"usuario1@email.com","password":"senha123"}'
+
+curl -X POST http://localhost:8001/user \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Usuário 2","lastName":"Dois","email":"usuario2@email.com","password":"senha321"}'
+
+curl -X POST http://localhost:8001/user \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Usuário 3","lastName":"Três","email":"usuario1@email.com","password":"senha123"}'
+
+curl -X POST http://localhost:8001/user \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Usuário 4","lastName":"Quatro","email":"usuario1@email.com","password":"senha321"}'

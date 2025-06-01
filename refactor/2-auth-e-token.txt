@@ -1,0 +1,19 @@
+# Usuário 1
+curl -X POST http://localhost:8001/token \
+  -H "Content-Type: application/json" \
+  -d '{"email":"usuario1@email.com", "password":"senha123"}'
+
+# Usuário 2
+curl -X POST http://localhost:8001/token \
+  -H "Content-Type: application/json" \
+  -d '{"email":"usuario2@email.com", "password":"senha321"}'
+
+# Usuário 3
+curl -X POST http://localhost:8001/token \
+  -H "Content-Type: application/json" \
+  -d '{"email":"usuario1@email.com", "password":"senha123"}'
+
+# Usuário 4
+curl -X POST http://localhost:8001/token \
+  -H "Content-Type: application/json" \
+  -d '{"email":"usuario1@email.com", "password":"senha321"}'
